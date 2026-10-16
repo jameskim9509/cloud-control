@@ -9,68 +9,123 @@
 <body>
   <header class="topbar">
     <h1>Cloud Control</h1>
-    <div class="topbar-actions">
+    <div class="topbar-actions" id="app-actions" hidden>
       <span class="muted">마지막 조회: <span id="last-fetched">-</span></span>
       <button id="refresh-btn" type="button">조회</button>
+      <button id="logout-btn" type="button" class="secondary">로그아웃</button>
     </div>
   </header>
 
-  <nav class="tabs" role="tablist">
-    <button type="button" role="tab" data-tab="dashboard" aria-selected="true">대시보드</button>
-    <button type="button" role="tab" data-tab="ec2" aria-selected="false">EC2</button>
-    <button type="button" role="tab" data-tab="s3" aria-selected="false">S3</button>
-    <button type="button" role="tab" data-tab="sg" aria-selected="false">보안 그룹</button>
-  </nav>
+  <!-- form을 쓰지 않는다: JS가 실패해도 브라우저가 토큰을 URL 쿼리로 전송하지 않게 하기 위함 -->
+  <section id="login-view" class="login">
+    <h2>앱 토큰 입력</h2>
+    <p class="muted">서버 .env의 ADMIN_API_TOKEN을 입력하세요. 토큰은 이 탭의 메모리에만 보관됩니다.</p>
+    <label for="token-input">토큰</label>
+    <input id="token-input" type="password" autocomplete="off" spellcheck="false">
+    <button id="connect-btn" type="button">연결</button>
+    <div id="login-status" class="status"></div>
+  </section>
 
-  <main>
-    <section id="tab-dashboard" class="panel" role="tabpanel">
-      <h2>계정</h2>
-      <div id="context-status" class="status"></div>
-      <dl id="context-info" class="info" hidden>
-        <dt>계정 ID</dt><dd id="ctx-account"></dd>
-        <dt>호출자 ARN</dt><dd id="ctx-arn"></dd>
-        <dt>리전</dt><dd id="ctx-region"></dd>
+  <div id="app-view" hidden>
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="dashboard" aria-selected="true">대시보드</button>
+      <button type="button" role="tab" data-tab="ec2" aria-selected="false">EC2 제어</button>
+      <button type="button" role="tab" data-tab="s3" aria-selected="false">S3</button>
+      <button type="button" role="tab" data-tab="sg" aria-selected="false">보안 그룹</button>
+    </nav>
+
+    <main>
+      <section id="tab-dashboard" class="panel" role="tabpanel">
+        <h2>계정</h2>
+        <div id="context-status" class="status"></div>
+        <dl id="context-info" class="info" hidden>
+          <dt>계정 ID</dt><dd id="ctx-account"></dd>
+          <dt>호출자 ARN</dt><dd id="ctx-arn"></dd>
+          <dt>리전</dt><dd id="ctx-region"></dd>
+        </dl>
+
+        <h2>리소스 수</h2>
+        <div class="cards">
+          <div class="card"><div class="card-label">EC2 인스턴스</div><div class="card-value" id="count-ec2">-</div></div>
+          <div class="card"><div class="card-label">S3 버킷</div><div class="card-value" id="count-s3">-</div></div>
+          <div class="card"><div class="card-label">보안 그룹</div><div class="card-value" id="count-sg">-</div></div>
+        </div>
+      </section>
+
+      <section id="tab-ec2" class="panel" role="tabpanel" hidden>
+        <div class="panel-header">
+          <h2>EC2 제어</h2>
+          <button id="control-refresh-btn" type="button" class="secondary">새로고침</button>
+        </div>
+        <div id="action-status" class="status"></div>
+        <div id="lost-request" class="status warn" hidden>
+          <p id="lost-request-text"></p>
+          <button id="lost-resend-btn" type="button">같은 요청 키로 다시 보내기</button>
+          <button id="lost-discard-btn" type="button" class="secondary">보관한 키 버리기</button>
+        </div>
+
+        <div class="split">
+          <div>
+            <h3>현재 상태</h3>
+            <div id="ec2-status" class="status"></div>
+            <table id="ec2-table" hidden>
+              <thead>
+                <tr><th>이름</th><th>인스턴스 ID</th><th>상태</th><th>유형</th><th>프라이빗 IP</th><th>퍼블릭 IP</th><th>작업</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div>
+            <h3>제어 이력 (최신 50건)</h3>
+            <div id="actions-status" class="status"></div>
+            <table id="actions-table" hidden>
+              <thead>
+                <tr><th>시각</th><th>인스턴스 ID</th><th>작업</th><th>상태</th><th>메시지</th><th>요청 키</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-s3" class="panel" role="tabpanel" hidden>
+        <h2>S3 버킷</h2>
+        <div id="s3-status" class="status"></div>
+        <table id="s3-table" hidden>
+          <thead><tr><th>버킷 이름</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section id="tab-sg" class="panel" role="tabpanel" hidden>
+        <h2>보안 그룹 (인바운드 규칙)</h2>
+        <div id="sg-status" class="status"></div>
+        <table id="sg-table" hidden>
+          <thead>
+            <tr><th>그룹 ID</th><th>그룹 이름</th><th>프로토콜</th><th>포트</th><th>소스</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="confirm-dialog">
+    <form method="dialog">
+      <h2>EC2 작업 확인</h2>
+      <dl class="info">
+        <dt>계정</dt><dd id="confirm-account"></dd>
+        <dt>리전</dt><dd id="confirm-region"></dd>
+        <dt>이름</dt><dd id="confirm-name"></dd>
+        <dt>인스턴스 ID</dt><dd id="confirm-id"></dd>
+        <dt>작업</dt><dd id="confirm-action"></dd>
       </dl>
-
-      <h2>리소스 수</h2>
-      <div class="cards">
-        <div class="card"><div class="card-label">EC2 인스턴스</div><div class="card-value" id="count-ec2">-</div></div>
-        <div class="card"><div class="card-label">S3 버킷</div><div class="card-value" id="count-s3">-</div></div>
-        <div class="card"><div class="card-label">보안 그룹</div><div class="card-value" id="count-sg">-</div></div>
+      <div class="dialog-actions">
+        <button type="submit" value="cancel" class="secondary">취소</button>
+        <button type="submit" value="ok" id="confirm-ok">승인</button>
       </div>
-    </section>
-
-    <section id="tab-ec2" class="panel" role="tabpanel" hidden>
-      <h2>EC2 인스턴스</h2>
-      <div id="ec2-status" class="status"></div>
-      <table id="ec2-table" hidden>
-        <thead>
-          <tr><th>이름</th><th>인스턴스 ID</th><th>상태</th><th>유형</th><th>프라이빗 IP</th><th>퍼블릭 IP</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </section>
-
-    <section id="tab-s3" class="panel" role="tabpanel" hidden>
-      <h2>S3 버킷</h2>
-      <div id="s3-status" class="status"></div>
-      <table id="s3-table" hidden>
-        <thead><tr><th>버킷 이름</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </section>
-
-    <section id="tab-sg" class="panel" role="tabpanel" hidden>
-      <h2>보안 그룹 (인바운드 규칙)</h2>
-      <div id="sg-status" class="status"></div>
-      <table id="sg-table" hidden>
-        <thead>
-          <tr><th>그룹 ID</th><th>그룹 이름</th><th>프로토콜</th><th>포트</th><th>소스</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </section>
-  </main>
+    </form>
+  </dialog>
 
   <script src="app.js"></script>
 </body>

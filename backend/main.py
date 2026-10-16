@@ -102,6 +102,12 @@ def list_security_groups(request: Request):
     return {"items": items, "count": len(items)}
 
 
+@api.get("/security-checks")
+def get_security_checks(request: Request):
+    # 요청마다 AWS에서 새로 조회한다. 결과를 저장하거나 캐시하지 않는다.
+    return aws(request).scan_attached_security_groups()
+
+
 @api.get("/actions")
 def list_actions(db: Session = Depends(get_db)):
     try:
